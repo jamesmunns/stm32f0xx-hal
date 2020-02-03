@@ -270,12 +270,18 @@ where
     }
 
     fn send_byte(&self, byte: u8) -> Result<(), Error> {
+        let mut to_ctr = 0;
         // Wait until we're ready for sending
         while {
             let isr = self.i2c.isr.read();
             self.check_and_clear_error_flags(&isr)?;
             isr.txis().bit_is_clear()
-        } {}
+        } {
+            to_ctr += 1;
+            if to_ctr >= 48_000 {
+                panic!("timeout send");
+            }
+        }
 
         // Push out a byte of data
         self.i2c.txdr.write(|w| unsafe { w.bits(u32::from(byte)) });
@@ -285,11 +291,17 @@ where
     }
 
     fn recv_byte(&self) -> Result<u8, Error> {
+        let mut to_ctr = 0;
         while {
             let isr = self.i2c.isr.read();
             self.check_and_clear_error_flags(&isr)?;
             isr.rxne().bit_is_clear()
-        } {}
+        } {
+            to_ctr += 1;
+            if to_ctr >= 48_000 {
+                panic!("timeout recv");
+            }
+        }
 
         let value = self.i2c.rxdr.read().bits() as u8;
         Ok(value)
